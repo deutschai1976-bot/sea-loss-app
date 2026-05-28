@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>海边亏损记录</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    background:linear-gradient(to bottom,#021526,#03346E,#6EACDA);
+    color:white;
+    min-height:100vh;
+    overflow-x:hidden;
+}
+
+.wave{
+    position:fixed;
+    width:200%;
+    height:220px;
+    background:rgba(255,255,255,0.08);
+    border-radius:43%;
+    animation:wave 18s linear infinite;
+    bottom:-140px;
+    left:-50%;
+}
+
+.wave2{
+    animation-duration:25s;
+    opacity:0.5;
+    bottom:-150px;
+}
+
+@keyframes wave{
+    from{transform:rotate(0deg);}
+    to{transform:rotate(360deg);}
+}
+
+.container{
+    max-width:420px;
+    margin:auto;
+    padding:20px;
+    position:relative;
+    z-index:2;
+}
+
+.card{
+    background:rgba(255,255,255,0.12);
+    backdrop-filter:blur(20px);
+    border-radius:30px;
+    padding:24px;
+    margin-bottom:18px;
+    box-shadow:0 8px 30px rgba(0,0,0,0.25);
+}
+
+.title{
+    font-size:30px;
+    font-weight:700;
+}
+
+.subtitle{
+    opacity:0.8;
+    margin-top:8px;
+    font-size:14px;
+}
+
+.big{
+    font-size:52px;
+    font-weight:700;
+    margin-top:16px;
+}
+
+.change{
+    font-size:34px;
+    font-weight:700;
+    margin-top:10px;
+}
+
+input{
+    width:100%;
+    box-sizing:border-box;
+    padding:18px;
+    border:none;
+    border-radius:18px;
+    font-size:18px;
+    background:rgba(0,0,0,0.2);
+    color:white;
+    margin-top:14px;
+}
+
+button{
+    width:100%;
+    padding:18px;
+    border:none;
+    border-radius:18px;
+    margin-top:16px;
+    font-size:18px;
+    font-weight:700;
+    background:#9FE2FF;
+    color:#003049;
+}
+
+.chart-box{
+    height:260px;
+}
+
+.footer{
+    text-align:center;
+    opacity:0.7;
+    margin-top:20px;
+    font-size:13px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="wave"></div>
+<div class="wave wave2"></div>
+
+<div class="container">
+
+    <div class="card">
+        <div class="title">🌊 海边亏损记录</div>
+        <div class="subtitle">每日亏损恢复追踪</div>
+
+        <div style="margin-top:28px;">
+            <div style="opacity:0.8;">今日总亏损</div>
+            <div class="big" id="todayLoss">¥0</div>
+        </div>
+
+        <div style="margin-top:26px;">
+            <div style="opacity:0.8;">今日变化</div>
+            <div class="change" id="todayChange">0</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div style="font-size:22px;font-weight:700;">
+            今日记录
+        </div>
+
+        <input 
+            type="number"
+            id="lossInput"
+            placeholder="输入今日总亏损金额"
+        />
+
+        <button onclick="saveLoss()">
+            保存 🌊
+        </button>
+    </div>
+
+    <div class="card">
+        <div style="font-size:22px;font-weight:700;margin-bottom:20px;">
+            亏损恢复趋势
+        </div>
+
+        <div class="chart-box">
+            <canvas id="lossChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <div style="font-size:22px;font-weight:700;margin-bottom:20px;">
+            每日变化趋势
+        </div>
+
+        <div class="chart-box">
+            <canvas id="changeChart"></canvas>
+        </div>
+    </div>
+
+    <div class="footer">
+        🌊 Sea Loss Tracker
+    </div>
+
+</div>
+
+<script>
+
+let records = JSON.parse(localStorage.getItem("seaLossRecords")) || [];
+
+const todayLoss = document.getElementById("todayLoss");
+const todayChange = document.getElementById("todayChange");
+
+function saveLoss(){
+
+    const value = Number(document.getElementById("lossInput").value);
+
+    if(!value) return;
+
+    const today = new Date().toLocaleDateString();
+
+    let change = 0;
+
+    if(records.length > 0){
+        change = value - records[records.length - 1].loss;
+    }
+
+    records.push({
+        date: today,
+        loss: value,
+        change: change
+    });
+
+    localStorage.setItem("seaLossRecords", JSON.stringify(records));
+
+    updateUI();
+
+    document.getElementById("lossInput").value = "";
+}
+
+function updateUI(){
+
+    if(records.length === 0) return;
+
+    const latest = records[records.length - 1];
+
+    todayLoss.innerHTML =
+        "¥" + latest.loss.toLocaleString();
+
+    const changeText =
+        (latest.change > 0 ? "+" : "") +
+        latest.change.toLocaleString();
+
+    todayChange.innerHTML = changeText;
+
+    if(latest.change > 0){
+        todayChange.style.color = "#9FE2FF";
+    }else{
+        todayChange.style.color = "#FFB4B4";
+    }
+
+    drawCharts();
+}
+
+let lossChart;
+let changeChart;
+
+function drawCharts(){
+
+    const labels = records.map(r => r.date);
+
+    const losses = records.map(r => r.loss);
+
+    const changes = records.map(r => r.change);
+
+    if(lossChart){
+        lossChart.destroy();
+    }
+
+    if(changeChart){
+        changeChart.destroy();
+    }
+
+    lossChart = new Chart(
+        document.getElementById("lossChart"),
+        {
+            type:"line",
+            data:{
+                labels:labels,
+                datasets:[{
+                    label:"总亏损",
+                    data:losses,
+                    borderColor:"#9FE2FF",
+                    tension:0.35
+                }]
+            },
+            options:{
+                responsive:true,
+                maintainAspectRatio:false
+            }
+        }
+    );
+
+    changeChart = new Chart(
+        document.getElementById("changeChart"),
+        {
+            type:"bar",
+            data:{
+                labels:labels,
+                datasets:[{
+                    label:"每日变化",
+                    data:changes
+                }]
+            },
+            options:{
+                responsive:true,
+                maintainAspectRatio:false
+            }
+        }
+    );
+}
+
+updateUI();
+
+</script>
+
+</body>
+</html>
